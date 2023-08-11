@@ -20,7 +20,8 @@ class MqttMessageHandler:
     # initializes the client
     def __init__(self, broker_data=BROKER_DATA, call_backs={}, my_id="") -> None:
         if broker_data:
-            self.client = self.get_client()
+            self.broker_data = broker_data
+            self.client = self.get_client(broker_data=broker_data)
         else:
             self.client = None
 
@@ -83,12 +84,12 @@ class MqttMessageHandler:
     #prepares the message to be sent
     def prepare_message(self, message_data, cache=None):
         message = MESSAGE_TEMPLATE.copy()
-        message.update({'timestamp': time.time(), 'id': self.my_id})
+        message.update({'timestamp': time.time(), 'id': ""})
         message.update(message_data)
         return message
     
     def send_message(self, message="", type="notice", to="all", cache=None):
-        message = self.prepare_message({'type': type, 'from': self.my_id, 'to': to, 'data': {'message': message}}, cache=cache)
+        message = self.prepare_message({'type': type, 'to': to, 'data': {'message': message}}, cache=cache)
         self.publish_to_topics(self.broker_data['publish_to'], message)
 
 if __name__ == '__main__':
