@@ -1,0 +1,10 @@
+./bin
+./include
+./lib
+./pyvenv.cfg
+**.**.pyc
+**.**.pyo
+**/**.pyc
+**/**.pyo
+__pycache__
+**/__pycache__

@@ -1,0 +1,14 @@
+{
+    "files.exclude": {
+      "**/.git": true,
+      "**/.gitignore": false,
+      "**/node_modules": true,
+      "**/build": true,
+      "**/__pycache__": true,
+      "**/bin":true,
+      "**/include":true,
+      "**/pyvenv.cfg":true,
+      "**/lib":true,
+      "**/lib64":true,
+    }
+  }
