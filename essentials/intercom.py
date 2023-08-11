@@ -4,15 +4,15 @@
 ## use as much async as possible
 
 import paho.mqtt.client as mqtt
-import json, time
+import json, time, argparse
 
 MESSAGE_TEMPLATE = {"id": "", "type": "", "from": "", "to": "", "timestamp": "", "data": {}, "cache_id": ""}
 
 BROKER_DATA = {
-    'username':"onverantwoordelik", 'password':"asdf8090ABC!!", 'subscribe_to': ['testin'], 'publish_to': ['testout'], 
+    'username':"onverantwoordelik", 'password':"asdf8090ABC!!", 'subscribe_to': ['testout'], 'publish_to': ['testin'], 
     'address':'3a4f7d6b0cd1473681d6c9bdfa569318.s2.eu.hivemq.cloud',
     'mqtt_port':8883, 'ws_port':8884, 'use_websockets':False,
-    'timeout':3600, "client_id": "testin"
+    'timeout':3600, "client_id": "testout"
 }
 
 
@@ -92,8 +92,15 @@ class MqttMessageHandler:
         self.publish_to_topics(self.broker_data['publish_to'], message)
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Run CHEAPRAY network manager')
+    parser.add_argument('--client', type=str, default='nitb', help='Client ID to run as')
+    args = parser.parse_args()
+    broker_data = BROKER_DATA.copy()
+    if args.client:
+        broker_data.update({'client_id': args.client})
+
+    message_handler = MqttMessageHandler(broker_data=broker_data, my_id=args.client)
     print('test client for mqtt message handler')
-    message_handler = MqttMessageHandler()
     message_handler.start()
     while True:
         message_handler.send_message(message=input("enter message: "), type="notice", to="all")
