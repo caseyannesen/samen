@@ -55,9 +55,10 @@ class MqttMessageHandler:
         return resp
     #notifies connetion to subscribers.
     def on_connect(self, client, userdata, flags, rc):
-        if self.broker_data.get('broker_data') and rc == 0:
+        if self.broker_data and rc == 0:
+            print('connected')
             self.subscribe_to_topics(self.broker_data['subscribe_to'])
-            message = self.prepare_message({'type': 'message', 'from': self.my_id, 'to': 'all', 'data': {'message': 'connected'}})
+            message = self.prepare_message({'type': 'message', 'from': "", 'to': 'all', 'data': {'message': 'connected'}})
             self.publish_to_topics(self.broker_data['publish_to'], message)
 
     def on_disconnect(self, client, userdata, rc):
@@ -76,6 +77,7 @@ class MqttMessageHandler:
     #starts the client
     def start(self):
         if self.client:
+            print(F"starting client {self.client}")
             self.client.loop_start()
     #stops the client
     def stop(self):
@@ -102,7 +104,7 @@ if __name__ == '__main__':
         broker_data.update({'client_id': args.client, 'subscribe_to': [args.client], 'publish_to': [args.remote]})
 
     message_handler = MqttMessageHandler(broker_data=broker_data, my_id=args.client)
-    print('test client for mqtt message handler')
+    print(F'test client for mqtt message handler params = {message_handler}')
     message_handler.start()
     while True:
         message_handler.send_message(message=input("enter message: "), type="notice", to="all")
