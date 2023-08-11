@@ -94,10 +94,11 @@ class MqttMessageHandler:
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Run CHEAPRAY network manager')
     parser.add_argument('--client', type=str, default='nitb', help='Client ID to run as')
+    parser.add_argument('--remote', type=str, default='nitb', help='Client ID to run as')
     args = parser.parse_args()
     broker_data = BROKER_DATA.copy()
-    if args.client:
-        broker_data.update({'client_id': args.client})
+    if args.client and args.remote:
+        broker_data.update({'client_id': args.client, 'subscribe_to': [args.client], 'publish_to': [args.remote]})
 
     message_handler = MqttMessageHandler(broker_data=broker_data, my_id=args.client)
     print('test client for mqtt message handler')
