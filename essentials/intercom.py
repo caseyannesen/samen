@@ -5,7 +5,7 @@
 
 import paho.mqtt.client as mqtt
 import json, time, argparse, hashlib
-
+from cache import cache as ch
 
 MESSAGE_TEMPLATE = {
     "id": "",   #unique id for the message set to the hash of the json string of data encoded as utf-8 ""
@@ -77,28 +77,55 @@ class MqttMessageHandler:
 
     def on_disconnect(self, client, userdata, rc):
         pass
-<<<<<<< HEAD
+    
     
     def cache_message(self, message):
         can_cache, timeout = message['cache']
-        print(F"{'' if can_cache else 'not '}caching message {message['id']} for {timeout} seconds")
+        data = None
+        # check if we can cache the message (responses can be cached)
+        if can_cache and timeout: #check if cache is enabled
+            data = ch.get(message['id']) # get the data from the cache if available
+            if message['type'] == 'request' and data: # if request and data is available send the data to the requester
+                pass
+            elif message['type'] == 'response':
+                if not data:
+                    print('response not cached, caching now')
+                    # set the cache
+                    ch.set(message['id'], {'value': message, 'timestamp': time.time(), 'timeout': timeout})
+                    data = ch.get(message['id'])
+                else:
+                    print('response already cached skipping')
+            else:
+                data = None
+                print('cache scenario not handled')
+        else:
+            print('cache not enabled')
+
+        # timeout checker
+        if data:
+            if time.time() - data['timestamp'] > data['timeout']:
+                print('cache expired')
+                ch.delete(message['id'])
+                data = None
+            else:
+                data = data['value']
+
+        return (data, message)
 
     def parse_message(self, message, topic):
         print(F"Received {message!r} T0: {topic!r}, FROM: {message['from']!r} FOR: {message['to']!r}")
-        self.cache_message(message)
+        _, message = self.cache_message(message)
         return message
     
+    def command_handler(self, message):
+        print(F"command handler {message!r}")
+
     # handles all the messages received
     def on_message(self, client, userdata, msg):
-        self.parse_message(json.loads(msg.payload), msg.topic)
+        response = self.parse_message(json.loads(msg.payload), msg.topic)
+        if response:
+            self.command_handler(response)
         
-=======
-
-    # handles all the messages received
-    def on_message(self, client, userdata, msg):
-        print(msg.topic+" "+str(msg.payload))
-
->>>>>>> refs/remotes/origin/main
     #subscribes to all the topics
     def subscribe_to_topics(self, topics):
         for topic in topics:
@@ -134,9 +161,20 @@ class MqttMessageHandler:
         
         return message
     
+    def send_to_action(self, message):
+        response, message = self.cache_message(message)
+        if response:
+            print(F'no need to send to action, cached response {response!r}')
+            self.command_handler(response)
+            return True
+        else:
+            print(F'no cache sending command')
+            return False
+            
     def send_message(self, message="", m_type="notice", data_type="", to="all", cache=[False, 0]):
         message = self.prepare_message(message, data_type, m_type, to=to, cache=cache)
-        self.publish_to_topics(self.broker_data['publish_to'], message)
+        if not self.send_to_action(message):
+            self.publish_to_topics(self.broker_data['publish_to'], message)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Run CHEAPRAY network manager')
@@ -151,4 +189,7 @@ if __name__ == '__main__':
     print(F'test client for mqtt message handler params = {message_handler}')
     message_handler.start()
     while True:
-        message_handler.send_message(message=input("enter message: "), m_type="notice", data_type="text", to="all")
+        inp = input("enter message: ")
+        inp = inp.split(' ')
+        m_type, data_type, to, cache, timeout, message = inp[0], inp[1], inp[2], inp[3], inp[4], ' '.join(inp[5:])
+        message_handler.send_message(message=message, m_type=m_type, data_type=data_type, to=to, cache=[cache, timeout])
