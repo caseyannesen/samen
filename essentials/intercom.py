@@ -17,7 +17,7 @@ MESSAGE_TEMPLATE = {
         'message': "", # message to be sent
         'type': "", #type of data [text, image, video, audio, file, json]
     },      
-    "cache": False, #whether to cache the message or not
+    "cache":[False, 0], #whether to cache the message or not
     }
 
 BROKER_DATA = {
@@ -72,7 +72,7 @@ class MqttMessageHandler:
         if self.broker_data and rc == 0:
             print('connected')
             self.subscribe_to_topics(self.broker_data['subscribe_to'])
-            message = self.prepare_message('connected', 'text', 'notice', to='all', cache=False)
+            message = self.prepare_message('connected', 'text', 'notice', to='all', cache=[False, 0])
             self.publish_to_topics(self.broker_data['publish_to'], message)
 
     def on_disconnect(self, client, userdata, rc):
@@ -104,7 +104,7 @@ class MqttMessageHandler:
             self.client.loop_stop()
 
     #prepares the message to be sent
-    def prepare_message(self, message_data,  message_data_type, message_type, to='all', cache=False):
+    def prepare_message(self, message_data,  message_data_type, message_type, to='all', cache=[False, 0]):
         message = MESSAGE_TEMPLATE.copy()
         data = {'message': message_data, 'type': message_data_type}
         data = {
@@ -117,7 +117,7 @@ class MqttMessageHandler:
         
         return message
     
-    def send_message(self, message="", m_type="notice", data_type="", to="all", cache=False):
+    def send_message(self, message="", m_type="notice", data_type="", to="all", cache=[False, 0]):
         message = self.prepare_message(message, data_type, m_type, to=to, cache=cache)
         self.publish_to_topics(self.broker_data['publish_to'], message)
 
