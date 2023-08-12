@@ -63,9 +63,20 @@ class MqttMessageHandler:
 
     def on_disconnect(self, client, userdata, rc):
         pass
+    
+    def cache_message(self, message):
+        can_cache, timeout = message['cache']
+        print(F"{'' if can_cache else 'not '}caching message {message['id']} for {timeout} seconds")
+
+    def parse_message(self, message, topic):
+        print(F"Received {message!r} T0: {topic!r}, FROM: {message['from']!r} FOR: {message['to']!r}")
+        self.cache_message(message)
+        return message
+    
     # handles all the messages received
     def on_message(self, client, userdata, msg):
-        print(msg.topic+" "+str(msg.payload))
+        self.parse_message(json.loads(msg.payload), msg.topic)
+        
     #subscribes to all the topics
     def subscribe_to_topics(self, topics):
         for topic in topics:
