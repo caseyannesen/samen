@@ -16,7 +16,8 @@ MESSAGE_TEMPLATE = {
     "data": { #data to be sent
         'message': "", # message to be sent
         'type': "", #type of data [text, image, video, audio, file, json]
-    },      
+    }, 'req_id': "", #id of the request if the message is a response
+    're_timestamp': "", #timestamp of the request if the message is a response
     "cache":[False, 0], #whether to cache the message or not
     }
 
@@ -70,62 +71,36 @@ class MqttMessageHandler:
     #notifies connetion to subscribers.
     def on_connect(self, client, userdata, flags, rc):
         if self.broker_data and rc == 0:
-            print('connected')
             self.subscribe_to_topics(self.broker_data['subscribe_to'])
-            message = self.prepare_message('connected', 'text', 'notice', to='all', cache=[False, 0])
+            message = self.prepare_message(message_data={'message':'connected', 'data_type':'text', 'type':'notice'}, cache=[False, 0])
             self.publish_to_topics(self.broker_data['publish_to'], message)
 
     def on_disconnect(self, client, userdata, rc):
         pass
     
-    
-    def cache_message(self, message):
-        can_cache, timeout = message['cache']
-        data = None
-        # check if we can cache the message (responses can be cached)
+    # function to cache a response
+    def cache_message(self, message, data=None):
+        can_cache, timeout = message['cache']  # check if we can cache the message (responses can be cached)
         if can_cache and timeout: #check if cache is enabled
-            data = ch.get(message['id']) # get the data from the cache if available
-            if message['type'] == 'request' and data: # if request and data is available send the data to the requester
-                pass
-            elif message['type'] == 'response':
-                if not data:
-                    print('response not cached, caching now')
-                    # set the cache
-                    ch.set(message['id'], {'value': message, 'timestamp': time.time(), 'timeout': timeout})
-                    data = ch.get(message['id'])
-                else:
-                    print('response already cached skipping')
-            else:
-                data = None
-                print('cache scenario not handled')
-        else:
-            print('cache not enabled')
-
-        # timeout checker
-        if data:
+            if message['type'] == 'response': # if cache response
+                ch.set(message['req_id'], {'value': message, 'timestamp': time.time(), 'timeout': timeout})
+            data = ch.get(message['id']) # get the cached message
+        if data: # timeout checker
             if time.time() - data['timestamp'] > data['timeout']:
-                print('cache expired')
                 ch.delete(message['id'])
                 data = None
             else:
                 data = data['value']
-
         return (data, message)
 
-    def parse_message(self, message, topic):
-        print(F"Received {message!r} T0: {topic!r}, FROM: {message['from']!r} FOR: {message['to']!r}")
-        _, message = self.cache_message(message)
-        return message
     
-    def command_handler(self, message):
-        print(F"command handler {message!r}")
-
     # handles all the messages received
     def on_message(self, client, userdata, msg):
-        response = self.parse_message(json.loads(msg.payload), msg.topic)
+        response, message = self.cache_message(json.loads(msg.payload))
         if response:
-            self.command_handler(response)
-        
+            pass
+        self.handle_message(message, skip=False)
+    
     #subscribes to all the topics
     def subscribe_to_topics(self, topics):
         for topic in topics:
@@ -134,7 +109,7 @@ class MqttMessageHandler:
     #publishes to all the topics
     def publish_to_topics(self, topics, message):
         for topic in topics:
-            self.client.publish(topic, payload=json.dumps(message), qos=2, retain=True)
+            self.client.publish(topic, payload=json.dumps(message), qos=2, retain=False)
 
     #starts the client
     def start(self):
@@ -148,33 +123,37 @@ class MqttMessageHandler:
             self.client.loop_stop()
 
     #prepares the message to be sent
-    def prepare_message(self, message_data,  message_data_type, message_type, to='all', cache=[False, 0]):
-        message = MESSAGE_TEMPLATE.copy()
-        data = {'message': message_data, 'type': message_data_type}
-        data = {
-            'from':self.broker_data['client_id'], 'type':message_type, 'to':to, 
-            'id': hashlib.md5(json.dumps(data).encode('utf-8')).hexdigest(),
-            'timestamp': time.time(), 'cache': cache, 'data': data
-            }
-        message.update(data)
-        print(message['id'])
-        
+    def prepare_message(self, message_data={}, respond_to={}, cache=[False, 0]):
+        message = MESSAGE_TEMPLATE
+        if not respond_to:
+            message['data'] = {'message': message_data['message'], 'type': message_data['data_type']}
+            message['to'], message['from'], message['type'] = message_data.get('to', 'all'), self.broker_data['client_id'], message_data['type']
+            message['id'] = hashlib.md5(json.dumps(message['data']).encode('utf-8')).hexdigest()
+            message['timestamp'], message['cache'] = time.time(), cache
+        elif respond_to:
+            message['data'] = {'message': message_data['data'], 'type': message_data['data_type']}
+            message['to'], message['from'] = respond_to['from'], self.broker_data['client_id']
+            message['id'] = hashlib.md5(json.dumps(message['data']).encode('utf-8')).hexdigest()
+            message['req_id'], message['timestamp'] = respond_to['id'], respond_to['timestamp']
+            message['re_timestamp'], message['cache'], message['type'] = time.time(), respond_to['cache'], 'response'
         return message
     
     def send_to_action(self, message):
         response, message = self.cache_message(message)
-        if response:
-            print(F'no need to send to action, cached response {response!r}')
-            self.command_handler(response)
-            return True
-        else:
-            print(F'no cache sending command')
-            return False
+        return [True, response] if response else [False, message]
             
-    def send_message(self, message="", m_type="notice", data_type="", to="all", cache=[False, 0]):
-        message = self.prepare_message(message, data_type, m_type, to=to, cache=cache)
-        if not self.send_to_action(message):
+    def send_message(self, message_data={}, reply_to={}, cache=[False, 0]):
+        message = self.prepare_message(message_data=message_data, respond_to=reply_to, cache=cache)
+        skip, response = self.send_to_action(message)
+        if skip:
+            self.handle_message(response, skip=True)
+        else:
             self.publish_to_topics(self.broker_data['publish_to'], message)
+        return True
+
+    def handle_message(self, message, skip=False):
+        print(F"got message {message} was cached={skip}")
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Run CHEAPRAY network manager')
@@ -191,5 +170,9 @@ if __name__ == '__main__':
     while True:
         inp = input("enter message: ")
         inp = inp.split(' ')
-        m_type, data_type, to, cache, timeout, message = inp[0], inp[1], inp[2], inp[3], inp[4], ' '.join(inp[5:])
-        message_handler.send_message(message=message, m_type=m_type, data_type=data_type, to=to, cache=[cache, timeout])
+        if len(inp) > 6:
+            m_type, data_type, to, cache, timeout, message = inp[0], inp[1], inp[2], inp[3], inp[4], ' '.join(inp[5:])
+        else:
+            m_type, data_type, to, cache, timeout, message = 'notice', 'text', 'all', True, 100, ' '.join(inp)
+        message_data = {'message': message, 'data_type': data_type, 'type': m_type, 'to': to}
+        message_handler.send_message(message_data=message_data, cache=[cache, timeout])
