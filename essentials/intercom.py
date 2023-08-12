@@ -131,7 +131,7 @@ class MqttMessageHandler:
             message['id'] = hashlib.md5(json.dumps(message['data']).encode('utf-8')).hexdigest()
             message['timestamp'], message['cache'] = time.time(), cache
         elif respond_to:
-            message['data'] = {'message': message_data['data'], 'type': message_data['data_type']}
+            message['data'] = {'message': message_data['message'], 'type': message_data['type']}
             message['to'], message['from'] = respond_to['from'], self.broker_data['client_id']
             message['id'] = hashlib.md5(json.dumps(message['data']).encode('utf-8')).hexdigest()
             message['req_id'], message['timestamp'] = respond_to['id'], respond_to['timestamp']
@@ -153,6 +153,9 @@ class MqttMessageHandler:
 
     def handle_message(self, message, skip=False):
         print(F"got message {message} was cached={skip}")
+        if message['type'] == 'request':
+            message['data']['message'] = F"got your message {message['data']['message']}"
+            self.send_message(message_data=message['data'], reply_to=message, cache=[True, 60])
 
 
 if __name__ == '__main__':
@@ -175,4 +178,4 @@ if __name__ == '__main__':
         else:
             m_type, data_type, to, cache, timeout, message = 'notice', 'text', 'all', True, 100, ' '.join(inp)
         message_data = {'message': message, 'data_type': data_type, 'type': m_type, 'to': to}
-        message_handler.send_message(message_data=message_data, cache=[cache, timeout])
+        message_handler.send_message(message_data=message_data, cache=[cache, int(timeout)])
