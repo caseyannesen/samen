@@ -31,7 +31,7 @@ BROKER_DATA = {
 
 class MqttMessageHandler:
     # initializes the client
-    def __init__(self, broker_data=BROKER_DATA, call_backs={}, my_id="") -> None:
+    def __init__(self, broker_data=BROKER_DATA, call_backs={}, handlers={'request':None,'message':None,'response':None} my_id="") -> None:
         if broker_data:
             self.broker_data = broker_data
             self.client = self.get_client(broker_data=broker_data)
@@ -42,6 +42,13 @@ class MqttMessageHandler:
             self.on_connect = call_backs.get('on_connect', self.on_connect)
             self.on_message = call_backs.get('on_message', self.on_message)
             self.on_disconnect = call_backs.get('on_disconnect', self.on_disconnect)
+        
+        self.request_handler = handlers.get('request', self.printboy)
+        self.message_handler = handlers.get('message', self.printboy)
+        self.response_handler = handlers.get('response', self.printboy)
+
+    def printboy(self, message):
+        print(F"Got message: {message}")
 
     #returns a client instance
     def get_client(self, broker_data=None, clean_session=True):
@@ -152,10 +159,12 @@ class MqttMessageHandler:
         return True
 
     def handle_message(self, message, skip=False):
-        print(F"got message {message} was cached={skip}")
-        if message['type'] == 'request':
-            message['data']['message'] = F"got your message {message['data']['message']}"
-            self.send_message(message_data=message['data'], reply_to=message, cache=[True, 60])
+        if message['type'] == 'request' and self.request_handler:
+            self.request_handler(message)
+        elif message['type'] == 'response' and self.response_handler:
+            self.response_handler(message)
+        elif self.message_handler:
+            self.message_handler(message)
 
 
 if __name__ == '__main__':
