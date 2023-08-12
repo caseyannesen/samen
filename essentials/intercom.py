@@ -31,7 +31,7 @@ BROKER_DATA = {
 
 class MqttMessageHandler:
     # initializes the client
-    def __init__(self, broker_data=BROKER_DATA, call_backs={}, handlers={'request':None,'message':None,'response':None} my_id="") -> None:
+    def __init__(self, broker_data=BROKER_DATA, call_backs={}, handlers={'request':None,'message':None,'response':None}, my_id="") -> None:
         if broker_data:
             self.broker_data = broker_data
             self.client = self.get_client(broker_data=broker_data)
