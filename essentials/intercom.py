@@ -4,9 +4,21 @@
 ## use as much async as possible
 
 import paho.mqtt.client as mqtt
-import json, time, argparse
+import json, time, argparse, hashlib
 
-MESSAGE_TEMPLATE = {"id": "", "type": "", "from": "", "to": "", "timestamp": "", "data": {}, "cache_id": ""}
+
+MESSAGE_TEMPLATE = {
+    "id": "",   #unique id for the message set to the hash of the json string of data encoded as utf-8 ""
+    "type": "", #type of the message [notice, request, response, error]
+    "from": "", #id of the sending module
+    "to": "all",   #id of the receiving module
+    "timestamp": "", #timestamp of the message
+    "data": { #data to be sent
+        'message': "", # message to be sent
+        'type': "", #type of data [text, image, video, audio, file, json]
+    },      
+    "cache": False, #whether to cache the message or not
+    }
 
 BROKER_DATA = {
     'username':"onverantwoordelik", 'password':"asdf8090ABC!!", 'subscribe_to': ['testout'], 'publish_to': ['testin'], 
@@ -29,6 +41,7 @@ class MqttMessageHandler:
             self.on_connect = call_backs.get('on_connect', self.on_connect)
             self.on_message = call_backs.get('on_message', self.on_message)
             self.on_disconnect = call_backs.get('on_disconnect', self.on_disconnect)
+
     #returns a client instance
     def get_client(self, broker_data=None, clean_session=True):
         resp = False
@@ -53,16 +66,18 @@ class MqttMessageHandler:
                     client.disconnect()
             resp = client
         return resp
+    
     #notifies connetion to subscribers.
     def on_connect(self, client, userdata, flags, rc):
         if self.broker_data and rc == 0:
             print('connected')
             self.subscribe_to_topics(self.broker_data['subscribe_to'])
-            message = self.prepare_message({'type': 'message', 'from': "", 'to': 'all', 'data': {'message': 'connected'}})
+            message = self.prepare_message('connected', 'text', 'notice', to='all', cache=False)
             self.publish_to_topics(self.broker_data['publish_to'], message)
 
     def on_disconnect(self, client, userdata, rc):
         pass
+<<<<<<< HEAD
     
     def cache_message(self, message):
         can_cache, timeout = message['cache']
@@ -77,32 +92,50 @@ class MqttMessageHandler:
     def on_message(self, client, userdata, msg):
         self.parse_message(json.loads(msg.payload), msg.topic)
         
+=======
+
+    # handles all the messages received
+    def on_message(self, client, userdata, msg):
+        print(msg.topic+" "+str(msg.payload))
+
+>>>>>>> refs/remotes/origin/main
     #subscribes to all the topics
     def subscribe_to_topics(self, topics):
         for topic in topics:
             self.client.subscribe(topic)
+
     #publishes to all the topics
     def publish_to_topics(self, topics, message):
         for topic in topics:
             self.client.publish(topic, payload=json.dumps(message), qos=2, retain=True)
+
     #starts the client
     def start(self):
         if self.client:
             print(F"starting client {self.client}")
             self.client.loop_start()
+
     #stops the client
     def stop(self):
         if self.client:
             self.client.loop_stop()
+
     #prepares the message to be sent
-    def prepare_message(self, message_data, cache=None):
+    def prepare_message(self, message_data,  message_data_type, message_type, to='all', cache=False):
         message = MESSAGE_TEMPLATE.copy()
-        message.update({'timestamp': time.time(), 'id': ""})
-        message.update(message_data)
+        data = {'message': message_data, 'type': message_data_type}
+        data = {
+            'from':self.broker_data['client_id'], 'type':message_type, 'to':to, 
+            'id': hashlib.md5(json.dumps(data).encode('utf-8')).hexdigest(),
+            'timestamp': time.time(), 'cache': cache, 'data': data
+            }
+        message.update(data)
+        print(message['id'])
+        
         return message
     
-    def send_message(self, message="", type="notice", to="all", cache=None):
-        message = self.prepare_message({'type': type, 'to': to, 'data': {'message': message}}, cache=cache)
+    def send_message(self, message="", m_type="notice", data_type="", to="all", cache=False):
+        message = self.prepare_message(message, data_type, m_type, to=to, cache=cache)
         self.publish_to_topics(self.broker_data['publish_to'], message)
 
 if __name__ == '__main__':
@@ -118,4 +151,4 @@ if __name__ == '__main__':
     print(F'test client for mqtt message handler params = {message_handler}')
     message_handler.start()
     while True:
-        message_handler.send_message(message=input("enter message: "), type="notice", to="all")
+        message_handler.send_message(message=input("enter message: "), m_type="notice", data_type="text", to="all")
