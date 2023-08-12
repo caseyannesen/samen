@@ -72,8 +72,7 @@ class MqttMessageHandler:
         if self.broker_data and rc == 0:
             print('connected')
             self.subscribe_to_topics(self.broker_data['subscribe_to'])
-            msg = {"type": "notice", "data": {"message": "connected", 'type':'text'},"cache": False}
-            message = self.prepare_message(msg)
+            message = self.prepare_message('connected', 'text', 'notice', to='all', cache=False)
             self.publish_to_topics(self.broker_data['publish_to'], message)
 
     def on_disconnect(self, client, userdata, rc):
@@ -105,16 +104,21 @@ class MqttMessageHandler:
             self.client.loop_stop()
 
     #prepares the message to be sent
-    def prepare_message(self, message_data, message_type, to='all', cache=False):
+    def prepare_message(self, message_data,  message_data_type, message_type, to='all', cache=False):
         message = MESSAGE_TEMPLATE.copy()
-        message['data']['message'] = message_data
-        message['data']['type'] = message_type
-        message['id'] = hashlib.md5(json.dumps(message['data']).encode('utf-8')).hexdigest()
-        message.update({'from': self.broker_data['client_id'], 'to':to, 'timestamp': time.time(), 'cache': cache})
-        return json.dumps(message)
+        data = {'message': message_data, 'type': message_data_type}
+        data = {
+            'from':self.broker_data['client_id'], 'type':message_type, 'to':to, 
+            'id': hashlib.md5(json.dumps(data).encode('utf-8')).hexdigest(),
+            'timestamp': time.time(), 'cache': cache, 'data': data
+            }
+        message.update(data)
+        print(message['id'])
+        
+        return message
     
-    def send_message(self, message="", type="notice", to="all", cache=None):
-        message = self.prepare_message({'type': type, 'to': to, 'data': {'message': message}}, cache=cache)
+    def send_message(self, message="", m_type="notice", data_type="", to="all", cache=False):
+        message = self.prepare_message(message, data_type, m_type, to=to, cache=cache)
         self.publish_to_topics(self.broker_data['publish_to'], message)
 
 if __name__ == '__main__':
@@ -130,4 +134,4 @@ if __name__ == '__main__':
     print(F'test client for mqtt message handler params = {message_handler}')
     message_handler.start()
     while True:
-        message_handler.send_message(message=input("enter message: "), type="notice", to="all")
+        message_handler.send_message(message=input("enter message: "), m_type="notice", data_type="text", to="all")
